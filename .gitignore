@@ -1,0 +1,37 @@
+# Python and build output
+.venv/
+__pycache__/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+build/
+dist/
+*.egg-info/
+*.py[cod]
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*~
+
+# Local configuration and credentials
+lillio-archive.toml
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+storage-state.json
+
+# Private Lillio data
+.lillio-profile/
+downloads/
+artifacts/
+exports/
+*.sqlite3
+*.sqlite3-*
+*.db
+*.har
+*.log

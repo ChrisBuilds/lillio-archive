@@ -1,0 +1,10 @@
+[lillio-archive]
+base-url = "https://app.lillio.com/"
+browser-mode = "auto"
+profile-dir = ".lillio-profile"
+download-dir = "downloads"
+artifact-dir = "artifacts"
+export-dir = "exports/media"
+max-expand-actions = 500
+retry-count = 3
+retry-delay = 1.0
