@@ -12,6 +12,18 @@ The tool never asks for or stores a password. Authentication happens in a
 persistent local Chromium profile. Browser data, downloaded media, manifests,
 logs, reports, and exports are excluded from Git.
 
+## Agent-First Usage
+
+This project was written primarily by AI coding agents and is most easily used
+with an agent operating on the user's behalf. For the best experience, clone
+the repository, point your coding agent at the project directory, and ask it to
+set up, inspect, download, verify, reconcile, or export the archive as needed.
+
+[`AGENTS.md`](AGENTS.md) gives agents project-specific operating and debugging
+instructions, including guidance for adapting the browser integration if
+Lillio changes its web application. Every operation is also available through
+the documented CLI for users who prefer to run commands directly.
+
 ## Requirements
 
 - macOS or Linux
