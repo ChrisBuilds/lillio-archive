@@ -61,15 +61,16 @@ def test_repair_future_archive_dates_moves_files_and_updates_manifest(
         profile_dir=tmp_path / "profile",
         artifact_dir=tmp_path / "artifacts",
     )
-    assert repair_future_archive_dates(
-        config, today=date(2026, 6, 10)
-    ) == 1
+    assert repair_future_archive_dates(config, today=date(2026, 6, 10)) == 1
 
     new_media = downloads / "2025-06-23" / "2025-06-23_Title_123.mov"
     assert new_media.read_bytes() == b"video"
-    assert json.loads(
-        new_media.with_name(f"{new_media.name}.json").read_text()
-    )["activity_date"] == "2025-06-23"
+    assert (
+        json.loads(new_media.with_name(f"{new_media.name}.json").read_text())[
+            "activity_date"
+        ]
+        == "2025-06-23"
+    )
     connection = sqlite3.connect(manifest)
     row = connection.execute(
         "SELECT activity_date, filename, size_bytes FROM media"

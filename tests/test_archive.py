@@ -1,11 +1,10 @@
-import hashlib
 import csv
-import json
+import hashlib
 import os
 
 import pytest
 
-from lillio_archive.archive import archive_report, export_archive, verify_archive
+from lillio_archive.archive import archive_report, export_archive
 from lillio_archive.config import Config
 from lillio_archive.manifest import Manifest, MediaRecord
 from lillio_archive.metadata import write_sidecar
@@ -77,10 +76,7 @@ def test_export_is_incremental_and_media_only(tmp_path) -> None:
     assert (config.export_dir / "latest").resolve() == second_batch.resolve()
     assert not list(first_batch.glob("*.json"))
     assert not list(first_batch.glob("*.csv"))
-    assert (
-        config.report_dir
-        / f"media-export-{second.filters['batch']}.csv"
-    ).exists()
+    assert (config.report_dir / f"media-export-{second.filters['batch']}.csv").exists()
 
 
 def test_export_recognizes_legacy_flat_files(tmp_path) -> None:
@@ -129,10 +125,7 @@ def test_export_copy_mode_includes_sidecars_and_generic_report(tmp_path) -> None
     assert exported.exists()
     assert exported.stat().st_ino != source.stat().st_ino
     assert exported.with_name(f"{exported.name}.json").exists()
-    report = (
-        config.report_dir
-        / f"media-export-{result.filters['batch']}.csv"
-    )
+    report = config.report_dir / f"media-export-{result.filters['batch']}.csv"
     row = next(csv.DictReader(report.open()))
     assert row["filename"] == f"{result.filters['batch']}/{source.name}"
     assert row["sha256"] == digest

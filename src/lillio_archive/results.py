@@ -1,48 +1,44 @@
 import csv
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 @dataclass
 class ItemResult:
     source_key: str
     status: str
-    filename: Optional[str] = None
+    filename: str | None = None
     bytes: int = 0
-    message: Optional[str] = None
+    message: str | None = None
 
 
 @dataclass
 class RunResult:
     command: str
-    started_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
-    finished_at: Optional[str] = None
-    filters: Dict[str, Any] = field(default_factory=dict)
-    items: List[ItemResult] = field(default_factory=list)
+    started_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    finished_at: str | None = None
+    filters: dict[str, Any] = field(default_factory=dict)
+    items: list[ItemResult] = field(default_factory=list)
 
     def add(self, **values: Any) -> None:
         self.items.append(ItemResult(**values))
 
     @property
-    def counts(self) -> Dict[str, int]:
-        result: Dict[str, int] = {}
+    def counts(self) -> dict[str, int]:
+        result: dict[str, int] = {}
         for item in self.items:
             result[item.status] = result.get(item.status, 0) + 1
         return result
 
     @property
     def failed(self) -> bool:
-        return any(
-            item.status in {"failed", "corrupt"} for item in self.items
-        )
+        return any(item.status in {"failed", "corrupt"} for item in self.items)
 
     def finish(self) -> None:
-        self.finished_at = datetime.now(timezone.utc).isoformat()
+        self.finished_at = datetime.now(UTC).isoformat()
 
     def write(self, directory: Path) -> tuple[Path, Path]:
         self.finish()

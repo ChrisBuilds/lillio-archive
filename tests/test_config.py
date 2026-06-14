@@ -40,9 +40,7 @@ export-dir = "~/lillio-exports"
 
     config = load_config(path=path, environ={})
 
-    assert config.download_dir == (
-        config_dir / "private" / "downloads"
-    ).resolve()
+    assert config.download_dir == (config_dir / "private" / "downloads").resolve()
     assert config.export_dir == Path("~/lillio-exports").expanduser().resolve()
 
 

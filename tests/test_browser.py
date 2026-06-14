@@ -36,23 +36,29 @@ def test_known_third_party_diagnostic_hosts_are_ignorable() -> None:
 
 
 def test_authoritative_activity_date_prefers_list_date() -> None:
-    assert authoritative_activity_date(
-        {
-            "id": 123,
-            "list_date": "2025-12-23T07:20:00.000-05:00",
-            "created_at": "2025-12-24T12:20:34.121-05:00",
-        }
-    ) == "2025-12-23"
+    assert (
+        authoritative_activity_date(
+            {
+                "id": 123,
+                "list_date": "2025-12-23T07:20:00.000-05:00",
+                "created_at": "2025-12-24T12:20:34.121-05:00",
+            }
+        )
+        == "2025-12-23"
+    )
 
 
 def test_authoritative_activity_date_falls_back_to_created_at() -> None:
-    assert authoritative_activity_date(
-        {
-            "id": 123,
-            "list_date": None,
-            "created_at": "2025-06-23T09:48:04.267-04:00",
-        }
-    ) == "2025-06-23"
+    assert (
+        authoritative_activity_date(
+            {
+                "id": 123,
+                "list_date": None,
+                "created_at": "2025-06-23T09:48:04.267-04:00",
+            }
+        )
+        == "2025-06-23"
+    )
 
 
 def test_archived_page_requires_every_media_item() -> None:
@@ -89,9 +95,5 @@ def test_record_journal_payload_maps_activity_ids_to_explicit_dates() -> None:
         }
     )
     assert count == 2
-    assert authoritative_activity_date(
-        browser._activities["100101"]
-    ) == "2025-12-23"
-    assert authoritative_activity_date(
-        browser._activities["100102"]
-    ) == "2025-06-23"
+    assert authoritative_activity_date(browser._activities["100101"]) == "2025-12-23"
+    assert authoritative_activity_date(browser._activities["100102"]) == "2025-06-23"

@@ -8,6 +8,9 @@ and behavior that remains within an authorized Lillio account.
 ```bash
 uv sync --extra test
 uv run playwright install chromium
+uv run ruff format --check src tests scripts
+uv run ruff check src tests scripts
+uv run pyright
 uv run pytest
 uv run python -m compileall -q src tests
 uv run python scripts/check_public_tree.py

@@ -4,7 +4,6 @@ import piexif
 
 from lillio_archive.metadata import embed_jpeg_metadata, write_sidecar
 
-
 MINIMAL_JPEG = bytes.fromhex(
     "FFD8FFE000104A46494600010100000100010000FFDB004300"
     + "00" * 64

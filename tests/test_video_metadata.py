@@ -35,6 +35,7 @@ def test_video_metadata_round_trip_without_reencoding(tmp_path) -> None:
         activity_date="2025-12-23",
     )
     tags = probe_video(path)
+    assert tags is not None
     assert tags["title"] == "Sample Clip"
     assert (tags.get("description") or tags.get("comment")) == "A short clip"
     assert tags["creation_time"].startswith("2025-12-23")

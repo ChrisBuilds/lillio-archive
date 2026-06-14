@@ -1,18 +1,17 @@
-import json
 import hashlib
+import json
 import re
 import time
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 from urllib.parse import urlparse
 
 from playwright.sync_api import BrowserContext, Page, Playwright, sync_playwright
 
 from .config import Config
 from .logging_config import get_logger
-
 
 logger = get_logger(__name__)
 
@@ -41,13 +40,13 @@ class MediaCandidate:
     activity_id: str
     media_type: str
     source_url: str
-    activity_date: Optional[str]
+    activity_date: str | None
     activity_date_source: str
-    title: Optional[str]
-    description: Optional[str]
-    list_date: Optional[str] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    title: str | None
+    description: str | None
+    list_date: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
     @property
     def source_key(self) -> str:
@@ -70,7 +69,7 @@ class MediaCandidate:
         return hashlib.sha256(payload.encode()).hexdigest()
 
 
-def parse_activity_date(text: str, today: Optional[date] = None) -> Optional[str]:
+def parse_activity_date(text: str, today: date | None = None) -> str | None:
     match = DATE_PATTERN.search(text)
     if not match:
         return None
@@ -84,7 +83,7 @@ def parse_activity_date(text: str, today: Optional[date] = None) -> Optional[str
     return parsed.isoformat()
 
 
-def authoritative_activity_date(activity: Dict[str, Any]) -> Optional[str]:
+def authoritative_activity_date(activity: dict[str, Any]) -> str | None:
     for field in ("list_date", "created_at"):
         value = activity.get(field)
         if not value:
@@ -102,8 +101,8 @@ def authoritative_activity_date(activity: Dict[str, Any]) -> Optional[str]:
 
 
 def fully_archived_page(
-    media_keys: Set[str],
-    archived_source_keys: Set[str],
+    media_keys: set[str],
+    archived_source_keys: set[str],
 ) -> bool:
     return bool(media_keys) and media_keys <= archived_source_keys
 
@@ -114,7 +113,7 @@ class LillioBrowser:
         self._playwright: Playwright
         self.context: BrowserContext
         self.page: Page
-        self._activities: Dict[str, Dict[str, Any]] = {}
+        self._activities: dict[str, dict[str, Any]] = {}
 
     def __enter__(self) -> "LillioBrowser":
         logger.info(
@@ -131,12 +130,18 @@ class LillioBrowser:
             accept_downloads=True,
             viewport={"width": 1440, "height": 1000},
         )
-        self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
+        self.page = (
+            self.context.pages[0] if self.context.pages else self.context.new_page()
+        )
         self.page.on("console", self._log_console_message)
-        self.page.on("pageerror", lambda error: logger.error("Browser page error: %s", error))
+        self.page.on(
+            "pageerror", lambda error: logger.error("Browser page error: %s", error)
+        )
         self.page.on("requestfailed", self._log_failed_request)
         self.page.on("response", self._handle_response)
-        logger.debug("Chromium started with %d existing page(s)", len(self.context.pages))
+        logger.debug(
+            "Chromium started with %d existing page(s)", len(self.context.pages)
+        )
         return self
 
     @staticmethod
@@ -188,7 +193,7 @@ class LillioBrowser:
                 error,
             )
 
-    def _record_journal_payload(self, payload: Dict[str, Any]) -> int:
+    def _record_journal_payload(self, payload: dict[str, Any]) -> int:
         recorded = 0
         for activities in payload.get("intervals", {}).values():
             for wrapper in activities:
@@ -258,7 +263,7 @@ class LillioBrowser:
             self.page.locator(".activity-modal").count(),
         )
 
-    def loaded_media_source_keys(self) -> Set[str]:
+    def loaded_media_source_keys(self) -> set[str]:
         values = self.page.evaluate(
             """
             () => [...document.querySelectorAll('.activity-modal')].flatMap(el => {
@@ -274,7 +279,7 @@ class LillioBrowser:
     def expand_feed(
         self,
         *,
-        archived_source_keys: Optional[Set[str]] = None,
+        archived_source_keys: set[str] | None = None,
     ) -> int:
         actions = 0
         control = self.page.locator(".more-images-btn")
@@ -348,7 +353,7 @@ class LillioBrowser:
         logger.info("Feed expansion finished after %d action(s)", actions)
         return actions
 
-    def inspect(self) -> Dict[str, Any]:
+    def inspect(self) -> dict[str, Any]:
         return self.page.evaluate(
             """
             () => {
@@ -389,7 +394,7 @@ class LillioBrowser:
             """
         )
 
-    def write_inspection(self, report: Dict[str, Any]) -> Path:
+    def write_inspection(self, report: dict[str, Any]) -> Path:
         self.config.artifact_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.config.artifact_dir.chmod(0o700)
         path = self.config.artifact_dir / "inspection.json"
@@ -398,9 +403,9 @@ class LillioBrowser:
         logger.info("Wrote redacted inspection report: %s", path)
         return path
 
-    def discover_media(self) -> List[MediaCandidate]:
+    def discover_media(self) -> list[MediaCandidate]:
         logger.info("Discovering downloadable media in loaded activities")
-        values: List[Dict[str, str]] = self.page.evaluate(
+        values: list[dict[str, str]] = self.page.evaluate(
             """
             () => [...document.querySelectorAll('.activity-modal')].map(el => ({
               id: el.id,
@@ -461,9 +466,13 @@ class LillioBrowser:
             video_count,
         )
         if ignored:
-            logger.debug("Ignored %d unsupported or malformed activity modal(s)", ignored)
+            logger.debug(
+                "Ignored %d unsupported or malformed activity modal(s)", ignored
+            )
         if missing_dates:
-            logger.warning("%d media item(s) have no parseable activity date", missing_dates)
+            logger.warning(
+                "%d media item(s) have no parseable activity date", missing_dates
+            )
         for candidate in candidates:
             logger.debug(
                 "Candidate activity=%s type=%s date=%s title_length=%d "

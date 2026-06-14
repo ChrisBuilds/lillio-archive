@@ -4,11 +4,13 @@ import mimetypes
 import os
 import random
 import re
+import sqlite3
 import sys
 import time
-from datetime import date, datetime, timezone
+from collections.abc import Callable, Mapping
+from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Callable, Optional, Set
+from typing import Protocol
 from urllib.parse import urlparse
 
 from playwright.sync_api import Error as PlaywrightError
@@ -17,6 +19,7 @@ from rich.progress import (
     BarColumn,
     Progress,
     ProgressColumn,
+    Task,
     TaskProgressColumn,
     TimeRemainingColumn,
 )
@@ -30,32 +33,51 @@ from .metadata import embed_jpeg_metadata, write_sidecar
 from .results import RunResult
 from .video_metadata import embed_video_metadata
 
-
 SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 TITLE_SEPARATOR = re.compile(r"[-_.\s]+")
 TRANSIENT_STATUSES = {408, 429}
 logger = get_logger(__name__)
 
 
+class ResponseLike(Protocol):
+    @property
+    def status(self) -> int: ...
+
+    @property
+    def ok(self) -> bool: ...
+
+    @property
+    def url(self) -> str: ...
+
+    @property
+    def headers(self) -> Mapping[str, str]: ...
+
+    def body(self) -> bytes: ...
+
+
+ManifestRow = sqlite3.Row | Mapping[str, str | int]
+MediaGetter = Callable[[str, float], ResponseLike]
+
+
 class ItemCountColumn(ProgressColumn):
-    def render(self, task: object) -> Text:
+    def render(self, task: Task) -> Text:
         total = int(task.total or 0)
         return Text(f"{int(task.completed)}/{total} items")
 
 
 class DownloadedBytesColumn(ProgressColumn):
-    def render(self, task: object) -> Text:
+    def render(self, task: Task) -> Text:
         downloaded = int(task.fields.get("downloaded_bytes", 0))
         return Text(f"{filesize.decimal(downloaded)} downloaded")
 
 
 class ByteThroughputColumn(ProgressColumn):
-    def render(self, task: object) -> Text:
+    def render(self, task: Task) -> Text:
         downloaded = int(task.fields.get("downloaded_bytes", 0))
         elapsed = task.elapsed or 0
         if downloaded <= 0 or elapsed <= 0:
             return Text("-- B/s")
-        return Text(f"{filesize.decimal(downloaded / elapsed)}/s")
+        return Text(f"{filesize.decimal(int(downloaded / elapsed))}/s")
 
 
 def download_progress(*, disable: bool) -> Progress:
@@ -70,7 +92,7 @@ def download_progress(*, disable: bool) -> Progress:
     )
 
 
-def filename_for(url: str, digest: str, content_type: Optional[str]) -> str:
+def filename_for(url: str, digest: str, content_type: str | None) -> str:
     original = SAFE_NAME.sub("_", Path(urlparse(url).path).name).strip("._")
     extension = mimetypes.guess_extension((content_type or "").split(";")[0]) or ""
     if not original:
@@ -88,24 +110,20 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def existing_file_valid(row: object) -> bool:
-    path = Path(row["filename"])
+def existing_file_valid(row: ManifestRow) -> bool:
+    path = Path(str(row["filename"]))
     return (
         path.is_file()
-        and path.stat().st_size == row["size_bytes"]
-        and sha256_file(path) == row["sha256"]
+        and path.stat().st_size == int(row["size_bytes"])
+        and sha256_file(path) == str(row["sha256"])
     )
 
 
-def valid_archive_source_keys(config: Config) -> Set[str]:
+def valid_archive_source_keys(config: Config) -> set[str]:
     if not config.manifest_path.exists():
         return set()
     with Manifest(config.manifest_path) as manifest:
-        keys = {
-            row["source_key"]
-            for row in manifest.all()
-            if existing_file_valid(row)
-        }
+        keys = {row["source_key"] for row in manifest.all() if existing_file_valid(row)}
     logger.info(
         "Validated %d archived media item(s) for incremental pagination",
         len(keys),
@@ -113,7 +131,11 @@ def valid_archive_source_keys(config: Config) -> Set[str]:
     return keys
 
 
-def response_filename(response: object, source_url: str, digest: str) -> str:
+def response_filename(
+    response: ResponseLike,
+    source_url: str,
+    digest: str,
+) -> str:
     disposition = response.headers.get("content-disposition", "")
     match = re.search(
         r"""filename\*?=(?:UTF-8''|["']?)([^"';]+)""",
@@ -124,41 +146,40 @@ def response_filename(response: object, source_url: str, digest: str) -> str:
         name = SAFE_NAME.sub("_", match.group(1)).strip("._")
         if name:
             return f"{digest[:12]}-{name}"
-    return filename_for(
-        source_url, digest, response.headers.get("content-type")
-    )
+    return filename_for(source_url, digest, response.headers.get("content-type"))
 
 
 def title_filename(
     *,
-    title: Optional[str],
-    activity_date: Optional[str],
+    title: str | None,
+    activity_date: str | None,
     activity_id: str,
     fallback_filename: str,
 ) -> str:
     suffix = Path(fallback_filename).suffix.lower()
     normalized = SAFE_NAME.sub("-", title or "").strip("-._")
     normalized = TITLE_SEPARATOR.sub("-", normalized)[:100].rstrip("-")
-    return "_".join(
-        [
-            activity_date or "unknown-date",
-            normalized or "untitled",
-            activity_id,
-        ]
-    ) + suffix
+    return (
+        "_".join(
+            [
+                activity_date or "unknown-date",
+                normalized or "untitled",
+                activity_id,
+            ]
+        )
+        + suffix
+    )
 
 
 def candidate_in_range(
     candidate: MediaCandidate,
     *,
-    since: Optional[date],
-    until: Optional[date],
-    created_after: Optional[datetime],
+    since: date | None,
+    until: date | None,
+    created_after: datetime | None,
 ) -> bool:
     activity = (
-        date.fromisoformat(candidate.activity_date)
-        if candidate.activity_date
-        else None
+        date.fromisoformat(candidate.activity_date) if candidate.activity_date else None
     )
     if since and (activity is None or activity < since):
         return False
@@ -169,25 +190,23 @@ def candidate_in_range(
             return False
         created = datetime.fromisoformat(candidate.created_at)
         if created.tzinfo is None:
-            created = created.replace(tzinfo=timezone.utc)
+            created = created.replace(tzinfo=UTC)
         if created <= created_after:
             return False
     return True
 
 
 def request_with_retry(
-    browser: LillioBrowser,
+    get_media: MediaGetter,
     candidate: MediaCandidate,
     config: Config,
     *,
     sleep: Callable[[float], None] = time.sleep,
-) -> object:
-    last_error: Optional[Exception] = None
+) -> ResponseLike:
+    last_error: Exception | None = None
     for attempt in range(config.retry_count + 1):
         try:
-            response = browser.context.request.get(
-                candidate.source_url, timeout=60_000
-            )
+            response = get_media(candidate.source_url, 60_000)
             if response.url.endswith("/login") or "text/html" in response.headers.get(
                 "content-type", ""
             ):
@@ -195,9 +214,7 @@ def request_with_retry(
             if response.ok:
                 return response
             if response.status not in TRANSIENT_STATUSES and response.status < 500:
-                raise RuntimeError(
-                    f"Media request failed with HTTP {response.status}"
-                )
+                raise RuntimeError(f"Media request failed with HTTP {response.status}")
             last_error = RuntimeError(
                 f"Transient media response HTTP {response.status}"
             )
@@ -220,7 +237,7 @@ def request_with_retry(
 
 
 def _write_media(
-    response: object,
+    response: ResponseLike,
     candidate: MediaCandidate,
     config: Config,
 ) -> tuple[Path, int, str]:
@@ -285,8 +302,8 @@ def download_discovered(
     browser: LillioBrowser,
     config: Config,
     *,
-    since: Optional[date] = None,
-    until: Optional[date] = None,
+    since: date | None = None,
+    until: date | None = None,
     new_only: bool = False,
     dry_run: bool = False,
     full_scan: bool = False,
@@ -335,7 +352,7 @@ def download_discovered(
                     )
                     manifest.update(
                         candidate.source_key,
-                        last_seen_at=datetime.now(timezone.utc).isoformat(),
+                        last_seen_at=datetime.now(UTC).isoformat(),
                         failure_details=None,
                     )
                     progress.advance(task)
@@ -349,7 +366,14 @@ def download_discovered(
                     progress.advance(task)
                     continue
                 try:
-                    response = request_with_retry(browser, candidate, config)
+                    response = request_with_retry(
+                        lambda url, timeout: browser.context.request.get(
+                            url,
+                            timeout=timeout,
+                        ),
+                        candidate,
+                        config,
+                    )
                     path, size, digest = _write_media(response, candidate, config)
                     progress.update(
                         task,
@@ -383,7 +407,7 @@ def download_discovered(
                                 created_at=candidate.created_at,
                                 updated_at=candidate.updated_at,
                                 metadata_fingerprint=candidate.metadata_fingerprint,
-                                last_seen_at=datetime.now(timezone.utc).isoformat(),
+                                last_seen_at=datetime.now(UTC).isoformat(),
                                 verification_state="verified",
                             )
                         )

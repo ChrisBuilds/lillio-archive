@@ -1,11 +1,11 @@
 import sqlite3
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional
+from typing import Any
 
 from .logging_config import get_logger
-
 
 logger = get_logger(__name__)
 
@@ -14,21 +14,21 @@ logger = get_logger(__name__)
 class MediaRecord:
     source_key: str
     source_url: str
-    activity_date: Optional[str]
-    activity_date_source: Optional[str]
-    media_type: Optional[str]
-    title: Optional[str]
-    description: Optional[str]
+    activity_date: str | None
+    activity_date_source: str | None
+    media_type: str | None
+    title: str | None
+    description: str | None
     filename: str
     sha256: str
     size_bytes: int
-    list_date: Optional[str] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
-    metadata_fingerprint: Optional[str] = None
-    last_seen_at: Optional[str] = None
+    list_date: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    metadata_fingerprint: str | None = None
+    last_seen_at: str | None = None
     verification_state: str = "unverified"
-    failure_details: Optional[str] = None
+    failure_details: str | None = None
 
 
 class Manifest:
@@ -73,8 +73,7 @@ class Manifest:
             "failure_details": "TEXT",
         }
         columns = {
-            row["name"]
-            for row in self.connection.execute("PRAGMA table_info(media)")
+            row["name"] for row in self.connection.execute("PRAGMA table_info(media)")
         }
         for name, definition in additions.items():
             if name not in columns:
@@ -128,7 +127,7 @@ class Manifest:
         )
         self.connection.commit()
 
-    def get(self, source_key: str) -> Optional[sqlite3.Row]:
+    def get(self, source_key: str) -> sqlite3.Row | None:
         return self.connection.execute(
             "SELECT * FROM media WHERE source_key = ?", (source_key,)
         ).fetchone()
@@ -173,7 +172,7 @@ class Manifest:
         )
         self.connection.commit()
 
-    def latest_successful_run(self, command: str = "download") -> Optional[str]:
+    def latest_successful_run(self, command: str = "download") -> str | None:
         row = self.connection.execute(
             """
             SELECT finished_at FROM runs
@@ -184,7 +183,7 @@ class Manifest:
         ).fetchone()
         return row["finished_at"] if row else None
 
-    def get_export(self, source_key: str) -> Optional[sqlite3.Row]:
+    def get_export(self, source_key: str) -> sqlite3.Row | None:
         return self.connection.execute(
             "SELECT * FROM exports WHERE source_key = ?",
             (source_key,),
@@ -214,7 +213,7 @@ class Manifest:
                 sha256,
                 filename,
                 batch,
-                datetime.now(timezone.utc).isoformat(),
+                datetime.now(UTC).isoformat(),
             ),
         )
         self.connection.commit()

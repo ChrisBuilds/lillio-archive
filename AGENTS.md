@@ -44,6 +44,9 @@ Use Python 3.11 or newer:
 ```bash
 uv sync --extra test
 uv run playwright install chromium
+uv run ruff format --check src tests scripts
+uv run ruff check src tests scripts
+uv run pyright
 uv run pytest -q
 uv run python -m compileall -q src tests scripts
 uv run python scripts/check_public_tree.py
@@ -432,8 +435,9 @@ Do not weaken `.gitignore` or the public-tree scanner to accommodate them.
 - Keep commands idempotent and continue processing after item-level failures.
 - Add focused tests for behavior changes, including migrations and restarts.
 - Use synthetic titles, IDs, timestamps, URLs, and media fixtures.
-- Run the full test suite, compilation, `git diff --check`, and
-  `scripts/check_public_tree.py` before committing.
+- Run Ruff formatting and lint checks, Pyright, the full test suite,
+  compilation, `git diff --check`, and `scripts/check_public_tree.py` before
+  committing.
 - Never stage ignored runtime data. Stage an explicit reviewed file list for
   public releases.
 

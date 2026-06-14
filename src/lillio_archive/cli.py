@@ -1,10 +1,11 @@
 import argparse
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import date
 from pathlib import Path
-from typing import Callable, Optional, Set
+from typing import TypeVar
 
 from . import __version__
 from .archive import (
@@ -20,6 +21,8 @@ from .logging_config import configure_logging
 from .manifest import Manifest
 from .repair import repair_future_archive_dates
 from .results import RunResult
+
+T = TypeVar("T")
 
 
 def iso_date(value: str) -> date:
@@ -83,10 +86,10 @@ def parser() -> argparse.ArgumentParser:
 
 def _with_browser(
     config: Config,
-    operation: Callable[[LillioBrowser], RunResult | int],
+    operation: Callable[[LillioBrowser], T],
     *,
-    archived_source_keys: Optional[Set[str]] = None,
-) -> RunResult | int:
+    archived_source_keys: set[str] | None = None,
+) -> T:
     initial = (
         replace(config, browser_mode="headless")
         if config.browser_mode == "auto"
@@ -129,7 +132,7 @@ def _record_result(config: Config, result: RunResult) -> None:
 def run(args: argparse.Namespace, config: Config) -> int:
     logger = logging.getLogger("lillio_archive.cli")
     logger.info("Starting command: %s", args.command)
-    result: Optional[RunResult] = None
+    result: RunResult | None = None
 
     if args.command == "repair-dates":
         repaired = repair_future_archive_dates(config)
@@ -146,6 +149,7 @@ def run(args: argparse.Namespace, config: Config) -> int:
             include_sidecars=args.include_sidecars,
         )
     elif args.command == "inspect":
+
         def inspect(browser: LillioBrowser) -> RunResult:
             path = browser.write_inspection(browser.inspect())
             inspection = RunResult(command="inspect")
@@ -184,9 +188,8 @@ def run(args: argparse.Namespace, config: Config) -> int:
 
     assert isinstance(result, RunResult)
     json_path, csv_path = result.write(config.report_dir)
-    if args.command != "download" or not args.dry_run:
-        if args.command != "download":
-            _record_result(config, result)
+    if args.command != "download":
+        _record_result(config, result)
     logger.info("Reports: %s and %s", json_path, csv_path)
     logger.info("Summary: %s", result.counts)
     return 1 if result.failed else 0
@@ -218,11 +221,11 @@ def main() -> None:
         raise SystemExit(run(args, config))
     except KeyboardInterrupt:
         logger.warning("Cancelled by user")
-        raise SystemExit(130)
+        raise SystemExit(130) from None
     except Exception as error:
         logger.error("Command failed: %s", error)
         logger.debug("Unhandled exception details", exc_info=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 if __name__ == "__main__":

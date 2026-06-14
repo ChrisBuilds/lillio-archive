@@ -2,8 +2,6 @@ import logging
 import re
 import sys
 from pathlib import Path
-from typing import Optional
-
 
 LOGGER_NAME = "lillio_archive"
 URL_QUERY_PATTERN = re.compile(r"(https?://[^\s?]+)\?[^\s]+")
@@ -31,7 +29,7 @@ def configure_logging(
     *,
     verbose: bool = False,
     quiet: bool = False,
-    log_file: Optional[Path] = None,
+    log_file: Path | None = None,
 ) -> logging.Logger:
     logger = logging.getLogger(LOGGER_NAME)
     logger.setLevel(logging.DEBUG)

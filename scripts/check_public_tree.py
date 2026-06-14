@@ -8,7 +8,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 FORBIDDEN_NAMES = {
     ".DS_Store",
@@ -31,15 +30,9 @@ PRIVATE_PARTS = {
     "exports",
 }
 CONTENT_PATTERNS = {
-    "absolute macOS home path": re.compile(
-        "/" + "Users/" + r"[^/\s]+/"
-    ),
-    "absolute Linux home path": re.compile(
-        "/" + "home/" + r"[^/\s]+/"
-    ),
-    "absolute Windows home path": re.compile(
-        r"[A-Za-z]:\\\\Users\\\\[^\\\\\s]+\\\\"
-    ),
+    "absolute macOS home path": re.compile("/" + "Users/" + r"[^/\s]+/"),
+    "absolute Linux home path": re.compile("/" + "home/" + r"[^/\s]+/"),
+    "absolute Windows home path": re.compile(r"[A-Za-z]:\\\\Users\\\\[^\\\\\s]+\\\\"),
     "private key": re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
     "GitHub personal token": re.compile(r"\b(?:ghp_|github_pat_)[A-Za-z0-9_]+"),
     "AWS access key": re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
@@ -53,11 +46,7 @@ def tracked_files() -> list[Path]:
         check=True,
         capture_output=True,
     )
-    return [
-        ROOT / value.decode()
-        for value in result.stdout.split(b"\0")
-        if value
-    ]
+    return [ROOT / value.decode() for value in result.stdout.split(b"\0") if value]
 
 
 def staged_files() -> list[Path]:
@@ -74,11 +63,7 @@ def staged_files() -> list[Path]:
         check=True,
         capture_output=True,
     )
-    return [
-        ROOT / value.decode()
-        for value in result.stdout.split(b"\0")
-        if value
-    ]
+    return [ROOT / value.decode() for value in result.stdout.split(b"\0") if value]
 
 
 def scan(paths: list[Path]) -> list[str]:

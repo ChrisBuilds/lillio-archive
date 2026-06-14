@@ -51,9 +51,7 @@ def test_manifest_migrates_legacy_caption_schema(tmp_path) -> None:
         pass
 
     connection = sqlite3.connect(path)
-    columns = {
-        row[1] for row in connection.execute("PRAGMA table_info(media)")
-    }
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(media)")}
     connection.close()
     assert {"title", "description", "activity_date_source"}.issubset(columns)
 
@@ -87,6 +85,7 @@ def test_manifest_migrates_photos_export_ledger(tmp_path) -> None:
 
     with Manifest(path) as manifest:
         row = manifest.get_export("item-1:image")
+        assert row is not None
         assert row["sha256"] == "abc123"
         assert (
             manifest.connection.execute(

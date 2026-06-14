@@ -2,10 +2,8 @@ import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from .logging_config import get_logger
-
 
 logger = get_logger(__name__)
 
@@ -17,9 +15,9 @@ def tools_available() -> bool:
 def embed_video_metadata(
     path: Path,
     *,
-    title: Optional[str],
-    description: Optional[str],
-    activity_date: Optional[str],
+    title: str | None,
+    description: str | None,
+    activity_date: str | None,
 ) -> bool:
     if path.suffix.lower() not in {".mov", ".mp4", ".m4v"}:
         return False
@@ -28,7 +26,18 @@ def embed_video_metadata(
         return False
 
     output = path.with_name(f".{path.stem}.metadata{path.suffix}")
-    command = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(path), "-map", "0", "-c", "copy"]
+    command = [
+        "ffmpeg",
+        "-y",
+        "-loglevel",
+        "error",
+        "-i",
+        str(path),
+        "-map",
+        "0",
+        "-c",
+        "copy",
+    ]
     if title:
         command.extend(["-metadata", f"title={title}"])
     if description:
@@ -51,7 +60,7 @@ def embed_video_metadata(
         return False
 
 
-def probe_video(path: Path) -> Optional[dict]:
+def probe_video(path: Path) -> dict | None:
     if not tools_available():
         return None
     command = [
@@ -67,9 +76,7 @@ def probe_video(path: Path) -> Optional[dict]:
     try:
         import json
 
-        result = subprocess.run(
-            command, check=True, capture_output=True, text=True
-        )
+        result = subprocess.run(command, check=True, capture_output=True, text=True)
         return json.loads(result.stdout).get("format", {}).get("tags", {})
     except (OSError, subprocess.CalledProcessError, ValueError):
         return None

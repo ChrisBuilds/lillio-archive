@@ -1,11 +1,10 @@
 import csv
-import hashlib
 import json
 import os
 import shutil
-from datetime import datetime, timezone
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable, Optional
 
 import piexif
 
@@ -18,12 +17,11 @@ from .metadata import embed_jpeg_metadata, sidecar_path, write_sidecar
 from .results import RunResult
 from .video_metadata import embed_video_metadata, probe_video, tools_available
 
-
 logger = get_logger(__name__)
 
 
 def _create_export_batch(root: Path) -> tuple[str, Path]:
-    stem = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%fZ")
+    stem = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%fZ")
     for suffix in range(1000):
         name = stem if suffix == 0 else f"{stem}-{suffix}"
         path = root / name
@@ -177,13 +175,13 @@ def reconcile_archive(
                 "metadata_fingerprint": candidate.metadata_fingerprint,
             }
             for name, value in comparisons.items():
-                if name in row.keys() and row[name] != value:
+                if name in row and row[name] != value:
                     changes[name] = value
             if not changes:
                 if apply:
                     manifest.update(
                         source_key,
-                        last_seen_at=datetime.now(timezone.utc).isoformat(),
+                        last_seen_at=datetime.now(UTC).isoformat(),
                         failure_details=None,
                     )
                 result.add(
@@ -200,9 +198,11 @@ def reconcile_archive(
                     activity_id=candidate.activity_id,
                     fallback_filename=old_path.name,
                 )
-                new_path = config.download_dir / (
-                    candidate.activity_date or "unknown-date"
-                ) / new_name
+                new_path = (
+                    config.download_dir
+                    / (candidate.activity_date or "unknown-date")
+                    / new_name
+                )
                 new_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
                 if new_path != old_path:
                     if new_path.exists():
@@ -245,7 +245,7 @@ def reconcile_archive(
                         "filename": str(new_path),
                         "sha256": sha256_file(new_path),
                         "size_bytes": new_path.stat().st_size,
-                        "last_seen_at": datetime.now(timezone.utc).isoformat(),
+                        "last_seen_at": datetime.now(UTC).isoformat(),
                         "failure_details": None,
                     }
                 )
@@ -359,9 +359,7 @@ def export_archive(
                         "bytes": legacy.stat().st_size,
                         "sha256": row["sha256"],
                         "mime_type": row["media_type"] or "",
-                        "activity_date": row["list_date"]
-                        or row["activity_date"]
-                        or "",
+                        "activity_date": row["list_date"] or row["activity_date"] or "",
                         "transfer_method": "legacy",
                         "metadata_limitations": _metadata_limitations(source),
                     }
@@ -371,8 +369,7 @@ def export_archive(
             target = batch_dir / source.name
             if target.exists():
                 target = batch_dir / (
-                    f"{source.stem}-{row['source_key'].split(':')[0]}"
-                    f"{source.suffix}"
+                    f"{source.stem}-{row['source_key'].split(':')[0]}{source.suffix}"
                 )
             target_sidecar = sidecar_path(target)
             try:
@@ -402,9 +399,7 @@ def export_archive(
                     "bytes": target.stat().st_size,
                     "sha256": row["sha256"],
                     "mime_type": row["media_type"] or "",
-                    "activity_date": row["list_date"]
-                    or row["activity_date"]
-                    or "",
+                    "activity_date": row["list_date"] or row["activity_date"] or "",
                     "transfer_method": method,
                     "metadata_limitations": _metadata_limitations(source),
                 }

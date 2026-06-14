@@ -1,14 +1,13 @@
 import hashlib
 import json
 import sqlite3
+from contextlib import suppress
 from datetime import date
 from pathlib import Path
-from typing import Optional
 
 from .config import Config
 from .logging_config import get_logger
 from .metadata import embed_jpeg_metadata
-
 
 logger = get_logger(__name__)
 
@@ -20,9 +19,7 @@ def _correct_future_date(value: str, today: date) -> str:
     return parsed.isoformat()
 
 
-def repair_future_archive_dates(
-    config: Config, *, today: Optional[date] = None
-) -> int:
+def repair_future_archive_dates(config: Config, *, today: date | None = None) -> int:
     reference = today or date.today()
     if not config.manifest_path.exists():
         logger.info("No manifest found; no archive dates require repair")
@@ -49,12 +46,14 @@ def repair_future_archive_dates(
             old_path = Path(row["filename"])
             filename = old_path.name
             if filename.startswith(f"{old_date}_"):
-                filename = f"{new_date}_{filename[len(old_date) + 1:]}"
+                filename = f"{new_date}_{filename[len(old_date) + 1 :]}"
             new_path = config.download_dir / new_date / filename
             new_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             new_path.parent.chmod(0o700)
             if new_path.exists() and new_path != old_path:
-                raise RuntimeError(f"Date repair destination already exists: {new_path}")
+                raise RuntimeError(
+                    f"Date repair destination already exists: {new_path}"
+                )
 
             old_sidecar = old_path.with_name(f"{old_path.name}.json")
             new_sidecar = new_path.with_name(f"{new_path.name}.json")
@@ -104,10 +103,8 @@ def repair_future_archive_dates(
                 old_date,
                 new_date,
             )
-            try:
+            with suppress(OSError):
                 old_path.parent.rmdir()
-            except OSError:
-                pass
     finally:
         connection.close()
 

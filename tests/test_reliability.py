@@ -1,5 +1,4 @@
-from datetime import date, datetime, timezone
-from pathlib import Path
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -47,7 +46,7 @@ def test_candidate_filters_are_inclusive() -> None:
         item,
         since=None,
         until=None,
-        created_after=datetime(2025, 12, 22, tzinfo=timezone.utc),
+        created_after=datetime(2025, 12, 22, tzinfo=UTC),
     )
 
 
@@ -103,30 +102,30 @@ def test_incremental_pagination_only_uses_valid_archive_files(tmp_path) -> None:
 
 
 class FakeResponse:
-    def __init__(self, status):
+    def __init__(self, status: int):
         self.status = status
         self.ok = status == 200
         self.url = "https://example.test/media"
         self.headers = {"content-type": "image/jpeg"}
 
+    def body(self) -> bytes:
+        return b"image"
+
 
 class FakeRequest:
-    def __init__(self, statuses):
+    def __init__(self, statuses: list[int]):
         self.statuses = iter(statuses)
 
-    def get(self, *_args, **_kwargs):
+    def get(self, _url: str, *, timeout: float) -> FakeResponse:
+        del timeout
         return FakeResponse(next(self.statuses))
 
 
-class FakeBrowser:
-    def __init__(self, statuses):
-        self.context = type("Context", (), {"request": FakeRequest(statuses)})()
-
-
 def test_retry_recovers_from_transient_statuses() -> None:
-    sleeps = []
+    sleeps: list[float] = []
+    request = FakeRequest([500, 429, 200])
     response = request_with_retry(
-        FakeBrowser([500, 429, 200]),
+        lambda url, timeout: request.get(url, timeout=timeout),
         candidate(),
         Config(retry_count=3, retry_delay=0),
         sleep=sleeps.append,
@@ -136,9 +135,10 @@ def test_retry_recovers_from_transient_statuses() -> None:
 
 
 def test_retry_stops_on_permanent_status() -> None:
+    request = FakeRequest([404])
     with pytest.raises(RuntimeError, match="HTTP 404"):
         request_with_retry(
-            FakeBrowser([404]),
+            lambda url, timeout: request.get(url, timeout=timeout),
             candidate(),
             Config(retry_count=3, retry_delay=0),
             sleep=lambda _delay: None,

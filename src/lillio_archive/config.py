@@ -1,9 +1,8 @@
 import os
+import tomllib
 from dataclasses import dataclass, fields, replace
 from pathlib import Path
-from typing import Any, Dict, Optional
-
-import tomllib
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -56,8 +55,8 @@ def _coerce(name: str, value: Any, *, base_dir: Path) -> Any:
 def load_config(
     *,
     path: Path = Path("lillio-archive.toml"),
-    overrides: Optional[Dict[str, Any]] = None,
-    environ: Optional[Dict[str, str]] = None,
+    overrides: dict[str, Any] | None = None,
+    environ: dict[str, str] | None = None,
 ) -> Config:
     config_path = path.expanduser()
     if not config_path.is_absolute():
@@ -66,9 +65,8 @@ def load_config(
     cwd = Path.cwd().resolve()
     known = {field.name for field in fields(Config)}
     defaults = Config()
-    values: Dict[str, Any] = {
-        name: _coerce(name, getattr(defaults, name), base_dir=cwd)
-        for name in known
+    values: dict[str, Any] = {
+        name: _coerce(name, getattr(defaults, name), base_dir=cwd) for name in known
     }
     if config_path.exists():
         data = tomllib.loads(config_path.read_text())
