@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from lillio_archive.archive import archive_report, export_archive
+from lillio_archive.archive import archive_report, export_archive, verify_archive
 from lillio_archive.config import Config
 from lillio_archive.manifest import Manifest, MediaRecord
 from lillio_archive.metadata import write_sidecar
@@ -47,6 +47,30 @@ def test_report_reads_manifest(tmp_path) -> None:
     config, _media = build_archive(tmp_path)
     result = archive_report(config)
     assert result.counts == {"verified": 1}
+
+
+def test_verify_accepts_relative_manifest_paths(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    config, media = build_archive(tmp_path)
+    relative_media = media.relative_to(tmp_path)
+    with Manifest(config.manifest_path) as manifest:
+        manifest.update("123:image", filename=str(relative_media))
+
+    result = verify_archive(config)
+
+    assert result.counts == {"corrupt": 1}
+    assert result.items[0].message == "JPEG metadata invalid"
+    assert not any(item.message == "orphaned file" for item in result.items)
+
+
+def test_export_reports_verification_failure_details(tmp_path) -> None:
+    config, media = build_archive(tmp_path)
+    media.unlink()
+
+    result = export_archive(config)
+
+    assert result.counts == {"corrupt": 1}
+    assert result.items[0].message == "media missing"
 
 
 def test_export_is_incremental_and_media_only(tmp_path) -> None:

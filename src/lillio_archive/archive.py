@@ -56,15 +56,15 @@ def _metadata_limitations(path: Path) -> str:
 
 def verify_archive(config: Config) -> RunResult:
     result = RunResult(command="verify")
-    referenced = set()
+    referenced: set[Path] = set()
     with Manifest(config.manifest_path) as manifest:
         integrity = manifest.integrity_check()
         if integrity != "ok":
             result.add(source_key="manifest", status="corrupt", message=integrity)
         for row in manifest.all():
             path = Path(row["filename"])
-            referenced.add(path)
-            referenced.add(sidecar_path(path))
+            referenced.add(path.resolve())
+            referenced.add(sidecar_path(path).resolve())
             errors = []
             if not path.is_file():
                 errors.append("media missing")
@@ -119,11 +119,12 @@ def verify_archive(config: Config) -> RunResult:
 
     if config.download_dir.exists():
         for path in config.download_dir.rglob("*"):
-            if not path.is_file() or path == config.manifest_path:
+            resolved_path = path.resolve()
+            if not path.is_file() or resolved_path == config.manifest_path.resolve():
                 continue
             if path.name == ".DS_Store":
                 continue
-            if path not in referenced:
+            if resolved_path not in referenced:
                 result.add(
                     source_key=f"orphan:{path}",
                     status="corrupt",
@@ -282,11 +283,15 @@ def export_archive(
         },
     )
     if verification.failed:
-        result.add(
-            source_key="archive",
-            status="failed",
-            message="archive verification failed; export not created",
-        )
+        for item in verification.items:
+            if item.status in {"failed", "corrupt"}:
+                result.add(
+                    source_key=item.source_key,
+                    status=item.status,
+                    filename=item.filename,
+                    bytes=item.bytes,
+                    message=item.message,
+                )
         result.finish()
         return result
     config.export_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
